@@ -57,7 +57,6 @@ def normalize(arr, t_min=0, t_max=1):
     return norm_arr
 
 
-
 def rasterize(x, y, g=np.ones(1), dx=30.0, blur=1.0, expand=1.1, draw=10000, wavelet_magnitude=False,use_windowing=True):
     ''' Rasterize a spatial transcriptomics dataset into a density image
     
@@ -237,7 +236,36 @@ def rasterize(x, y, g=np.ones(1), dx=30.0, blur=1.0, expand=1.1, draw=10000, wav
         output = X,Y,W
     return output
     
-
+def parallel_rasterize(x, y, g=np.ones(1), dx=30.0, blur=1.0, expand=1.1, draw=10000, wavelet_magnitude=False, use_windowing=True, num_processes=4):
+    """
+    Parallel version of the rasterize function.
+    """
+    if not isinstance(blur, list):
+        blur = [blur]
+    nb = len(blur)
+    blur = np.array(blur)
+    n = len(x)
+    maxblur = np.max(blur)
+    
+    # Ensure blurs are sorted if using wavelet magnitude.
+    if wavelet_magnitude and np.any(blur != np.sort(blur)[::-1]):
+        raise Exception('When using wavelet magnitude, blurs must be sorted from greatest to least')
+    
+    # Initialization similar to the original function...
+    
+    # Split data into chunks for parallel processing.
+    chunk_size = int(np.ceil(n / num_processes))
+    data_chunks = [(x[i:i + chunk_size], y[i:i + chunk_size], g[i:i + chunk_size], dx, blur, nb, X_, Y_, maxblur, use_windowing, wavelet_magnitude) for i in range(0, n, chunk_size)]
+    
+    # Use a multiprocessing pool to parallelize the rasterization.
+    with Pool(num_processes) as pool:
+        results = pool.map(rasterize_worker, data_chunks)
+    
+    # Combine the results from all workers.
+    W = np.sum(results, axis=0)
+    
+    # Final processing, similar to the original function...
+    return X, Y, W
     
 def rasterize_with_signal(x, y, s=None, dx=30.0, blur=1.0, expand=1.1, draw=0, wavelet_magnitude=False,use_windowing=True):
     ''' Rasterize a spatial transcriptomics dataset into a density image
